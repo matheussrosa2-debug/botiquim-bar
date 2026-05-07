@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Botiquim Brand Tokens ──────────────────────────────────────── */
+:root {
+  --btq-red:       #C41E1E;
+  --btq-red-dark:  #A01818;
+  --btq-red-light: #F5E8E8;
+  --btq-gold:      #C9A84C;
+  --btq-gold-dark: #A88830;
+  --btq-gold-light:#FDF6E3;
+  --btq-dark:      #1A1A1A;
+  --btq-cream:     #FAFAF7;
+  --btq-border:    #E8E2D9;
+}
+
+@layer base {
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Lato', system-ui, sans-serif;
+    background-color: var(--btq-cream);
+    color: var(--btq-dark);
+  }
+  h1, h2, h3 {
+    font-family: 'Playfair Display', Georgia, serif;
+  }
+}
+
+@layer components {
+
+  /* ── Inputs ──────────────────────────────────────────────────── */
+  .input {
+    @apply w-full rounded-xl border bg-white px-4 py-3 text-sm text-zinc-900
+           placeholder:text-zinc-400 focus:outline-none focus:ring-2 transition
+           disabled:opacity-50;
+    border-color: var(--btq-border);
+    font-family: 'Lato', sans-serif;
+  }
+  .input:focus {
+    border-color: var(--btq-red);
+    ring-color: var(--btq-red-light);
+    --tw-ring-color: #F5E8E8;
+  }
+
+  /* ── Buttons ─────────────────────────────────────────────────── */
+  .btn-primary {
+    @apply w-full rounded-xl py-3 text-sm font-bold text-white
+           active:scale-[.98] transition disabled:opacity-50 disabled:cursor-not-allowed;
+    background-color: var(--btq-red);
+    font-family: 'Lato', sans-serif;
+    letter-spacing: 0.04em;
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--btq-red-dark);
+  }
+
+  .btn-secondary {
+    @apply rounded-xl border bg-white px-4 py-2.5 text-sm font-medium
+           active:scale-[.98] transition;
+    border-color: var(--btq-border);
+    color: #44403c;
+    font-family: 'Lato', sans-serif;
+  }
+  .btn-secondary:hover {
+    background-color: var(--btq-gold-light);
+    border-color: var(--btq-gold);
+  }
+
+  .btn-ghost {
+    @apply rounded-xl px-4 py-2.5 text-sm font-medium text-zinc-500
+           hover:bg-zinc-100 active:scale-[.98] transition;
+    font-family: 'Lato', sans-serif;
+  }
+
+  .btn-gold {
+    @apply w-full rounded-xl py-3 text-sm font-bold active:scale-[.98] transition;
+    background-color: var(--btq-gold);
+    color: var(--btq-dark);
+    font-family: 'Lato', sans-serif;
+    letter-spacing: 0.04em;
+  }
+  .btn-gold:hover {
+    background-color: var(--btq-gold-dark);
+  }
+
+  /* ── Cards ───────────────────────────────────────────────────── */
+  .card {
+    @apply bg-white rounded-2xl shadow-sm p-5;
+    border: 1px solid var(--btq-border);
+  }
+
+  /* ── Labels ──────────────────────────────────────────────────── */
+  .label {
+    @apply block text-xs font-bold mb-1.5 uppercase tracking-wider;
+    color: #78716c;
+    font-family: 'Lato', sans-serif;
+  }
+  .field-err {
+    @apply text-xs text-red-600 mt-1 min-h-[16px];
+  }
+
+  /* ── Badges ──────────────────────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold;
+    font-family: 'Lato', sans-serif;
+    letter-spacing: 0.02em;
+  }
+  .badge-green  { @apply bg-emerald-50  text-emerald-700; }
+  .badge-yellow { @apply bg-amber-50    text-amber-700; }
+  .badge-red    { background-color: var(--btq-red-light); color: var(--btq-red); }
+  .badge-blue   { @apply bg-blue-50     text-blue-700; }
+  .badge-gray   { @apply bg-zinc-100    text-zinc-600; }
+  .badge-gold   { background-color: var(--btq-gold-light); color: var(--btq-gold-dark); }
+
+  /* ── Stat Cards ──────────────────────────────────────────────── */
+  .stat-card {
+    @apply bg-white rounded-2xl shadow-sm p-5 flex flex-col gap-1;
+    border: 1px solid var(--btq-border);
+  }
+
+  /* ── Botiquim Divider ────────────────────────────────────────── */
+  .btq-divider {
+    @apply relative flex items-center my-4;
+  }
+  .btq-divider::before,
+  .btq-divider::after {
+    content: '';
+    @apply flex-1 h-px;
+    background: var(--btq-gold);
+    opacity: 0.4;
+  }
+  .btq-divider span {
+    @apply px-3 text-xs font-bold uppercase tracking-widest;
+    color: var(--btq-gold-dark);
+    font-family: 'Lato', sans-serif;
+  }
+
+  /* ── Header accent line ──────────────────────────────────────── */
+  .btq-header-accent {
+    @apply h-1 w-12 rounded-full mb-3;
+    background: linear-gradient(90deg, var(--btq-red), var(--btq-gold));
+  }
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { border-radius: 999px; background: #d6cfc4; }
+::-webkit-scrollbar-thumb:hover { background: #b8ae9f; }
+
+/* ── Tailwind custom colors ──────────────────────────────────────── */
