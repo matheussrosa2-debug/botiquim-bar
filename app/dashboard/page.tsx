@@ -270,7 +270,7 @@ export default function Dashboard() {
   async function removePrizeImage(prizeId: string) {
     await fetch(`/api/prizes/upload?prize_id=${prizeId}`, { method:"DELETE" });
     setPrizes(prev => prev.map(p => p.id===prizeId ? {...p, image_url: undefined} : p));
-    setEditPrize(x => x ? {...x, image_url: null} : x);
+    setEditPrize(x => x ? {...x, image_url: undefined} : x);
   }
 
   // Event CRUD
