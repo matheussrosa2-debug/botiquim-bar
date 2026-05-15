@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 type CodeResult = {
   found: boolean; valid?: boolean; redeemed?: boolean; expired?: boolean;
+  dayInvalid?: boolean; validDaysText?: string; nextValidDate?: string;
   customerName?: string; customerPhone?: string; prizeName?: string; prizeHow?: string;
   expiresAt?: string; redeemedAt?: string; code?: string;
 };
@@ -189,6 +190,14 @@ export default function AcessoPage() {
       <div className="rounded-xl bg-red-50 border border-red-200 p-4">
         <p className="font-semibold text-red-700">Código expirado</p>
         <p className="text-sm text-red-500 mt-1">Expirou em {result.expiresAt ? new Date(result.expiresAt).toLocaleString("pt-BR") : "—"}</p>
+      </div>
+    );
+    if (result.dayInvalid) return (
+      <div className="rounded-xl bg-orange-50 border border-orange-200 p-4">
+        <p className="font-semibold text-orange-700">📅 Dia de resgate inválido</p>
+        <p className="text-sm text-orange-600 mt-1">Prêmio: <strong>{result.prizeName}</strong></p>
+        <p className="text-sm text-orange-600 mt-1">Dias permitidos: <strong>{result.validDaysText}</strong></p>
+        {result.nextValidDate && <p className="text-xs text-orange-500 mt-1">Próximo dia disponível: {result.nextValidDate}</p>}
       </div>
     );
     const remH = result.expiresAt ? Math.ceil((new Date(result.expiresAt).getTime() - Date.now()) / 3600000) : 0;

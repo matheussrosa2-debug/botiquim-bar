@@ -5,7 +5,7 @@ import { slugify } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Stats = { totalCustomers:number; totalCodes:number; redeemed:number; pending:number; expired:number; consentCount:number; todayRegistrations:number; registrationsByDay:{date:string;count:number}[]; prizeDistribution:{name:string;count:number;color:string}[]; birthday:{today:number;month:number}; whatsapp:{sent:number;failed:number}; };
-type Prize = { id:string; name:string; short:string; how:string; sub:string; color:string; weight:number; validity_hours:number; validity_type:string; validity_until:string|null; enabled:boolean; limit_type:string; limit_every_n_registrations:number|null; limit_per_period_count:number|null; limit_per_period_type:string|null; limit_total_count:number|null; schedule_start_hour:number|null; schedule_end_hour:number|null; fallback_prize_id:string|null; issued_count:number; };
+type Prize = { id:string; name:string; short:string; how:string; sub:string; color:string; weight:number; validity_hours:number; validity_type:string; validity_until:string|null; enabled:boolean; limit_type:string; limit_every_n_registrations:number|null; limit_per_period_count:number|null; limit_per_period_type:string|null; limit_total_count:number|null; schedule_start_hour:number|null; schedule_end_hour:number|null; fallback_prize_id:string|null; issued_count:number; valid_days:number[]|null; image_url?:string; };
 type Customer = { id:string; name:string; cpf:string; phone:string; email:string; birth_date:string; instagram:string; created_at:string; prize_code:string; prize_name:string; event_name:string; marketing_consent:boolean; deleted_at?:string; };
 type Code = { id:string; code:string; customer_name:string; prize_name:string; created_at:string; expires_at:string; redeemed:boolean; redeemed_at:string; event_name:string; type:string; redeemed_by_name:string; };
 type Event = { id:string; name:string; description:string; date:string; active:boolean; slug:string; qr_color:string; qr_bg_color:string; };
@@ -693,7 +693,7 @@ export default function Dashboard() {
               <>
                 <div className="flex justify-between items-center mb-4">
                   <p className="text-sm text-zinc-500">Prêmios e probabilidades da roleta</p>
-                  <button className="btn-secondary" onClick={()=>setEditPrize({name:"",short:"",how:"",sub:"",color:"#1D9E75",weight:10,validity_hours:24,validity_type:"hours",enabled:true,limit_type:"none"})}>+ Novo</button>
+                  <button className="btn-secondary" onClick={()=>setEditPrize({name:"",short:"",how:"",sub:"",color:"#1D9E75",weight:10,validity_hours:24,validity_type:"hours",enabled:true,limit_type:"none",valid_days:null})}>+ Novo</button>
                 </div>
                 <div className="space-y-2">
                   {prizes.map(p=>{
@@ -709,6 +709,7 @@ export default function Dashboard() {
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-sm text-zinc-800 truncate">{p.name}</p>
                           <p className="text-xs text-zinc-400">Peso {p.weight} · {pct}% · {p.limit_type!=="none"?`⚡ ${p.limit_type}`:"sem limite"} · emitido {p.issued_count||0}x</p>
+                        {p.valid_days?.length ? <p className="text-xs mt-0.5" style={{color:"#C41E1E"}}>📅 {p.valid_days.sort((a:number,b:number)=>a-b).map((d:number)=>["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][d]).join(", ")}</p> : <p className="text-xs text-zinc-300 mt-0.5">📅 Todos os dias</p>}
                         </div>
                         <button onClick={()=>setEditPrize(p)} className="btn-ghost text-xs px-3 py-1.5">Editar</button>
                         <button onClick={async()=>{if(!confirm("Excluir?"))return;await fetch(`/api/prizes?id=${p.id}`,{method:"DELETE"});setPrizes(prev=>prev.filter(x=>x.id!==p.id));}} className="text-red-400 text-xs px-2">✕</button>
@@ -748,6 +749,36 @@ export default function Dashboard() {
                   {editPrize.limit_type==="total"&&<div><label className="label">Total máximo</label><input className="input" type="number" min={1} value={editPrize.limit_total_count||""} onChange={e=>setEditPrize(x=>({...x,limit_total_count:+e.target.value}))}/></div>}
                   {editPrize.limit_type==="schedule"&&<div className="grid grid-cols-2 gap-3"><div><label className="label">Das (hora)</label><input className="input" type="number" min={0} max={23} value={editPrize.schedule_start_hour??""} onChange={e=>setEditPrize(x=>({...x,schedule_start_hour:+e.target.value}))}/></div><div><label className="label">Até (hora)</label><input className="input" type="number" min={0} max={24} value={editPrize.schedule_end_hour??""} onChange={e=>setEditPrize(x=>({...x,schedule_end_hour:+e.target.value}))}/></div></div>}
                 </div>
+                <div className="mb-4 p-3 bg-zinc-50 rounded-xl border border-zinc-200">
+                  <p className="text-xs font-medium text-zinc-600 mb-3">Dias de resgate</p>
+                  <p className="text-xs text-zinc-400 mb-3">Selecione os dias em que este prêmio pode ser resgatado. Deixe todos desmarcados para permitir qualquer dia.</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[["Dom",0],["Seg",1],["Ter",2],["Qua",3],["Qui",4],["Sex",5],["Sáb",6]].map(([label, num])=>{
+                      const days = (editPrize as Record<string,unknown>).valid_days as number[]|null ?? [];
+                      const checked = days.includes(num as number);
+                      return (
+                        <button key={num} type="button"
+                          onClick={()=>{
+                            const cur = ((editPrize as Record<string,unknown>).valid_days as number[]|null) ?? [];
+                            const next = checked ? cur.filter(d=>d!==num) : [...cur, num as number];
+                            setEditPrize(x=>({...x, valid_days: next.length>0?next:null}));
+                          }}
+                          className={`py-2 rounded-xl text-xs font-bold transition border-2 ${checked?"border-btq-red text-btq-red bg-red-50":"border-zinc-200 text-zinc-400 bg-white"}`}
+                          style={checked?{borderColor:"#C41E1E",color:"#C41E1E",backgroundColor:"#FEF2F2"}:{}}>
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {((editPrize as Record<string,unknown>).valid_days as number[]|null)?.length ? (
+                    <p className="text-xs text-zinc-500 mt-2">
+                      ✅ Resgate permitido: {((editPrize as Record<string,unknown>).valid_days as number[]).sort((a,b)=>a-b).map(d=>["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][d]).join(", ")}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-zinc-400 mt-2">📅 Todos os dias permitidos</p>
+                  )}
+                </div>
+
                 {editPrize.id && (
                   <div className="mb-4 p-3 bg-zinc-50 rounded-xl border border-zinc-200">
                     <p className="text-xs font-medium text-zinc-600 mb-3">Imagem do prêmio (opcional)</p>

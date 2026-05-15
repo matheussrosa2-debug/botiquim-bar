@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getSession } from "@/lib/auth";
 import { audit } from "@/lib/audit";
+import { checkValidDay } from "@/lib/validdays";
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await db
     .from("prize_codes")
-    .select("*")
+    .select("*, prizes(valid_days)")
     .eq("code", code.toUpperCase().trim())
     .maybeSingle();
 
@@ -23,6 +24,20 @@ export async function POST(req: NextRequest) {
   if (!data)  return NextResponse.json({ error: "Código não encontrado. Verifique os caracteres." }, { status: 404 });
   if (data.redeemed) return NextResponse.json({ error: "Este código já foi utilizado anteriormente." }, { status: 409 });
   if (new Date(data.expires_at) < new Date()) return NextResponse.json({ error: "Este código está expirado." }, { status: 410 });
+
+  // Check valid days
+  const prize = data.prizes as { valid_days: number[] | null } | null;
+  const validDays = prize?.valid_days ?? null;
+  const dayCheck = checkValidDay(validDays);
+
+  if (!dayCheck.isValid) {
+    return NextResponse.json({
+      error: `Este prêmio só pode ser resgatado ${dayCheck.validDaysText === "Todos os dias" ? "todos os dias" : "às " + dayCheck.validDaysText}.${dayCheck.nextValidDate ? ` Próximo dia: ${dayCheck.nextValidDate}.` : ""}`,
+      dayInvalid:    true,
+      validDaysText: dayCheck.validDaysText,
+      nextValidDate: dayCheck.nextValidDate,
+    }, { status: 422 });
+  }
 
   const { error: updateError } = await db.from("prize_codes").update({
     redeemed:            true,

@@ -11,7 +11,7 @@ function encodePayload(obj: Record<string, unknown>): string {
   return btoa(unescape(encodeURIComponent(json)));
 }
 
-type Prize = { id:string; name:string; short:string; how:string; sub:string; color:string; weight:number; validity_hours:number; validity_type:string; enabled:boolean; image_url?: string; };
+type Prize = { id:string; name:string; short:string; how:string; sub:string; color:string; weight:number; validity_hours:number; validity_type:string; enabled:boolean; image_url?: string; valid_days?: number[]|null; };
 type Event = { id:string; name:string; description:string; active:boolean; };
 type Step  = "cpf" | "form" | "wheel" | "prize";
 
@@ -368,6 +368,34 @@ export default function Home() {
               <p className="text-xs text-zinc-400 uppercase tracking-wider mb-2">Como resgatar</p>
               <p className="text-sm text-zinc-700 leading-relaxed">{wonPrize.how}</p>
             </div>
+
+            {/* Valid days info */}
+            {wonPrize.valid_days && wonPrize.valid_days.length > 0 ? (
+              <div className="rounded-xl p-3 mb-4 text-left" style={{backgroundColor:"#FDF6E3",border:"1px solid #C9A84C33"}}>
+                <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{color:"#A88830"}}>📅 Dias de resgate</p>
+                <p className="text-sm font-semibold" style={{color:"#1A1A1A"}}>
+                  {wonPrize.valid_days.slice().sort((a,b)=>a-b).map(d=>["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"][d]).join(", ")}
+                </p>
+                {(() => {
+                  const today = new Date().getDay();
+                  const isToday = wonPrize.valid_days.includes(today);
+                  if (isToday) return <p className="text-xs mt-1" style={{color:"#2E7D32"}}>✅ Você pode resgatar hoje!</p>;
+                  // Find next valid day
+                  for (let i=1;i<=7;i++) {
+                    const next = (today+i)%7;
+                    if (wonPrize.valid_days.includes(next)) {
+                      const d = new Date(); d.setDate(d.getDate()+i);
+                      return <p className="text-xs mt-1" style={{color:"#C41E1E"}}>⏰ Próximo resgate: {d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"})}</p>;
+                    }
+                  }
+                })()}
+              </div>
+            ) : (
+              <div className="rounded-xl p-3 mb-4 text-left" style={{backgroundColor:"#F0FDF4",border:"1px solid #86EFAC"}}>
+                <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{color:"#166534"}}>📅 Dias de resgate</p>
+                <p className="text-sm" style={{color:"#166534"}}>✅ Válido todos os dias!</p>
+              </div>
+            )}
             <div className="border-2 border-dashed border-zinc-200 rounded-xl p-4 mb-2">
               <p className="text-xs text-zinc-400 uppercase tracking-wider mb-2">código do prêmio</p>
               <p className="text-3xl font-bold tracking-[.25em] font-mono text-zinc-900 mb-3">{wonCode}</p>

@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
     fallback_prize_id:           body.fallback_prize_id      || null,
     estimated_value:             body.estimated_value        ?? 0,
     image_url:                   body.image_url              || null,
+    valid_days:                  body.valid_days?.length > 0 ? body.valid_days : null,
   };
 
   const { data, error } = await db.from("prizes").insert(payload).select("id").single();
@@ -57,6 +58,11 @@ export async function PATCH(req: NextRequest) {
 
   const { id, ...fields } = await req.json();
   if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
+
+  // Handle valid_days — empty array means "all days" (store as null)
+  if ("valid_days" in fields) {
+    fields.valid_days = fields.valid_days?.length > 0 ? fields.valid_days : null;
+  }
 
   const { error } = await supabaseAdmin().from("prizes").update(fields).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

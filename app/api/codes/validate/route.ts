@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getSession } from "@/lib/auth";
+import { checkValidDay } from "@/lib/validdays";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -10,9 +11,11 @@ export async function GET(req: NextRequest) {
   if (!code) return NextResponse.json({ error: "Código obrigatório" }, { status: 400 });
 
   const db = supabaseAdmin();
+
+  // Get code with prize details
   const { data, error } = await db
     .from("prize_codes")
-    .select("*, customers(name, phone)")
+    .select("*, customers(name, phone), prizes(valid_days)")
     .eq("code", code.toUpperCase().trim())
     .maybeSingle();
 
@@ -22,17 +25,26 @@ export async function GET(req: NextRequest) {
   const expired  = new Date(data.expires_at) < new Date();
   const customer = data.customers as { name: string; phone: string } | null;
 
+  // Check valid days restriction
+  const prize = data.prizes as { valid_days: number[] | null } | null;
+  const validDays = prize?.valid_days ?? null;
+  const dayCheck = checkValidDay(validDays);
+
   return NextResponse.json({
-    found:        true,
-    valid:        !data.redeemed && !expired,
-    redeemed:     data.redeemed,
+    found:          true,
+    valid:          !data.redeemed && !expired && dayCheck.isValid,
+    redeemed:       data.redeemed,
     expired,
-    code:         data.code,
-    customerName: customer?.name || data.customer_name || "—",
-    customerPhone:customer?.phone || "—",
-    prizeName:    data.prize_name,
-    prizeHow:     data.prize_how  || "",
-    expiresAt:    data.expires_at,
-    redeemedAt:   data.redeemed_at || null,
+    dayInvalid:     !dayCheck.isValid,
+    code:           data.code,
+    customerName:   customer?.name || data.customer_name || "—",
+    customerPhone:  customer?.phone || "—",
+    prizeName:      data.prize_name,
+    prizeHow:       data.prize_how || "",
+    expiresAt:      data.expires_at,
+    redeemedAt:     data.redeemed_at || null,
+    validDaysText:  dayCheck.validDaysText,
+    nextValidDate:  dayCheck.nextValidDate,
+    nextValidDay:   dayCheck.nextValidDay,
   });
 }
