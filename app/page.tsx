@@ -184,7 +184,6 @@ export default function Home() {
       setWonPrize(data.prize); setWonCode(data.code);
       setWonExpiry(data.expires_at ? new Date(data.expires_at).toLocaleString("pt-BR") : "");
       spinning.current = true; setSpinLabel("Girando..."); setSpinLoading(false);
-      // Find the index in the CLIENT prizes array by ID — guarantees animation matches prize
       const clientIndex = prizes.findIndex(p => p.id === data.prize.id);
       const safeIndex   = clientIndex >= 0 ? clientIndex : 0;
       animateToIndex(safeIndex, () => setStep("prize"));
@@ -195,6 +194,68 @@ export default function Home() {
   }
 
   function setF(k: string, v: string) { setForm(f => ({ ...f, [k]: v })); setFormErr(e => ({ ...e, [k]: "" })); }
+
+  // ── Valid days helper ────────────────────────────────────────────
+  function ValidDaysBox({ prize }: { prize: Prize }) {
+    const dayNames     = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+    const dayNamesShort = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+
+    if (!prize.valid_days || prize.valid_days.length === 0) {
+      return (
+        <div className="rounded-xl p-4 mb-4 text-left" style={{backgroundColor:"#F0FDF4", border:"1px solid #86EFAC"}}>
+          <p className="text-sm font-bold mb-1" style={{color:"#166534"}}>✅ Pode resgatar qualquer dia!</p>
+          <p className="text-sm" style={{color:"#166534"}}>É só chamar o garçom e mostrar o código. Aproveita! 🍺</p>
+        </div>
+      );
+    }
+
+    const sorted   = [...prize.valid_days].sort((a, b) => a - b);
+    const daysText = sorted.map(d => dayNames[d]).join(" e ");
+    const today    = new Date().getDay();
+    const isToday  = prize.valid_days.includes(today);
+
+    // Find next valid day
+    let nextDateStr = "";
+    let nextDayShort = "";
+    for (let i = 1; i <= 7; i++) {
+      const next = (today + i) % 7;
+      if (prize.valid_days.includes(next)) {
+        const d = new Date();
+        d.setDate(d.getDate() + i);
+        nextDateStr  = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+        nextDayShort = dayNamesShort[next];
+        break;
+      }
+    }
+
+    if (isToday) {
+      return (
+        <div className="rounded-xl p-4 mb-4 text-left" style={{backgroundColor:"#FDF6E3", border:"1px solid #C9A84C55"}}>
+          <p className="text-sm font-bold mb-1" style={{color:"#A88830"}}>🎉 Hoje é dia de resgatar!</p>
+          <p className="text-sm" style={{color:"#78716c"}}>
+            Chama o garçom, mostra o código e aproveita! 🍺
+          </p>
+          <p className="text-xs mt-2" style={{color:"#A88830"}}>
+            📅 Dias de resgate: <strong>{daysText}</strong>
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="rounded-xl p-4 mb-4 text-left" style={{backgroundColor:"#FDF6E3", border:"1px solid #C9A84C55"}}>
+        <p className="text-sm font-bold mb-1" style={{color:"#C41E1E"}}>
+          📅 Resgate: {daysText}
+        </p>
+        <p className="text-sm mb-2" style={{color:"#78716c"}}>
+          Guarda esse código e vem na <strong>{nextDayShort} ({nextDateStr})</strong> resgatar com o garçom! 😄
+        </p>
+        <p className="text-xs" style={{color:"#A88830"}}>
+          💡 Seu código fica salvo e não vai a lugar nenhum até lá!
+        </p>
+      </div>
+    );
+  }
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-start pt-8 pb-16 px-4">
@@ -369,40 +430,16 @@ export default function Home() {
               <p className="text-sm text-zinc-700 leading-relaxed">{wonPrize.how}</p>
             </div>
 
-            {/* Valid days info */}
-            {wonPrize.valid_days && wonPrize.valid_days.length > 0 ? (
-              <div className="rounded-xl p-3 mb-4 text-left" style={{backgroundColor:"#FDF6E3",border:"1px solid #C9A84C33"}}>
-                <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{color:"#A88830"}}>📅 Dias de resgate</p>
-                <p className="text-sm font-semibold" style={{color:"#1A1A1A"}}>
-                  {wonPrize.valid_days.slice().sort((a,b)=>a-b).map(d=>["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"][d]).join(", ")}
-                </p>
-                {(() => {
-                  const today = new Date().getDay();
-                  const isToday = wonPrize.valid_days.includes(today);
-                  if (isToday) return <p className="text-xs mt-1" style={{color:"#2E7D32"}}>✅ Você pode resgatar hoje!</p>;
-                  // Find next valid day
-                  for (let i=1;i<=7;i++) {
-                    const next = (today+i)%7;
-                    if (wonPrize.valid_days.includes(next)) {
-                      const d = new Date(); d.setDate(d.getDate()+i);
-                      return <p className="text-xs mt-1" style={{color:"#C41E1E"}}>⏰ Próximo resgate: {d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"2-digit"})}</p>;
-                    }
-                  }
-                })()}
-              </div>
-            ) : (
-              <div className="rounded-xl p-3 mb-4 text-left" style={{backgroundColor:"#F0FDF4",border:"1px solid #86EFAC"}}>
-                <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{color:"#166534"}}>📅 Dias de resgate</p>
-                <p className="text-sm" style={{color:"#166534"}}>✅ Válido todos os dias!</p>
-              </div>
-            )}
+            {/* Valid days — mensagens descontraídas */}
+            <ValidDaysBox prize={wonPrize} />
+
             <div className="border-2 border-dashed border-zinc-200 rounded-xl p-4 mb-2">
               <p className="text-xs text-zinc-400 uppercase tracking-wider mb-2">código do prêmio</p>
               <p className="text-3xl font-bold tracking-[.25em] font-mono text-zinc-900 mb-3">{wonCode}</p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`/api/codes/qr?code=${wonCode}`} alt="QR Code do prêmio" className="w-28 h-28 mx-auto rounded-lg" />
             </div>
-            <p className="text-xs text-zinc-400">Mostre o código ou QR ao atendente.<br />Expira em: {wonExpiry}</p>
+            <p className="text-xs text-zinc-400">Mostre o código ou QR ao garçom.<br />Expira em: {wonExpiry}</p>
           </div>
         )}
 
