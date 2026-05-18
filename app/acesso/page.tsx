@@ -143,42 +143,51 @@ export default function AcessoPage() {
     setScannerStatus("Aponte para o QR Code do cliente");
   }, []);
 
-  async function startScanner() {
+  function startScanner() {
     setScannerErr(""); setScannerOpen(true); setScannerStatus("Iniciando câmera...");
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
-      });
+
+    // Must be synchronous start (no await before getUserMedia) for Safari iOS
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment" },
+    }).then(stream => {
       streamRef.current = stream;
-
-      // Pre-load jsQR while camera starts
-      await loadJsQR();
-
       const video = videoRef.current;
-      if (!video) return;
+      if (!video) { stream.getTracks().forEach(t => t.stop()); return; }
 
       video.srcObject = stream;
-      video.setAttribute("playsinline", "true"); // required for iOS Safari
-      video.setAttribute("muted", "true");
 
-      // Wait for video to be ready before playing — fixes Safari iOS issue
-      await new Promise<void>((resolve, reject) => {
-        video.oncanplay = () => resolve();
-        video.onerror  = () => reject(new Error("video error"));
-        // Fallback timeout in case canplay never fires
-        setTimeout(resolve, 3000);
-        video.load();
-      });
-
-      try { await video.play(); } catch { /* Safari may throw on play() — ignore */ }
-
-      setScannerStatus("Aponte para o QR Code do cliente");
-      scanningRef.current = true;
-      requestAnimationFrame(scanFrame);
-    } catch {
-      setScannerErr("Não foi possível acessar a câmera. Verifique as permissões do navegador.");
+      video.onloadedmetadata = () => {
+        const playPromise = video.play();
+        if (playPromise) {
+          playPromise.then(() => {
+            setScannerStatus("Aponte para o QR Code do cliente");
+            loadJsQR().then(() => {
+              scanningRef.current = true;
+              requestAnimationFrame(scanFrame);
+            });
+          }).catch(() => {
+            // Safari sometimes rejects play() — try once more
+            setTimeout(() => {
+              video.play().catch(() => {});
+              setScannerStatus("Aponte para o QR Code do cliente");
+              loadJsQR().then(() => {
+                scanningRef.current = true;
+                requestAnimationFrame(scanFrame);
+              });
+            }, 500);
+          });
+        } else {
+          setScannerStatus("Aponte para o QR Code do cliente");
+          loadJsQR().then(() => {
+            scanningRef.current = true;
+            requestAnimationFrame(scanFrame);
+          });
+        }
+      };
+    }).catch(() => {
+      setScannerErr("Câmera não disponível. No iPhone, acesse Ajustes → Safari → Câmera → Permitir.");
       setScannerOpen(false);
-    }
+    });
   }
 
   async function scanFrame() {
