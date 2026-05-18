@@ -236,7 +236,10 @@ export default function Home() {
             Chama o garçom, mostra o código e aproveita! 🍺
           </p>
           <p className="text-xs mt-2" style={{color:"#A88830"}}>
-            📅 Dias de resgate: <strong>{daysText}</strong>
+            📅 Resgate: <strong>{daysText}</strong>
+          </p>
+          <p className="text-xs mt-1" style={{color:"#C41E1E"}}>
+            ⚠️ Válido somente para consumo no local.
           </p>
         </div>
       );
@@ -248,10 +251,10 @@ export default function Home() {
           📅 Resgate: {daysText}
         </p>
         <p className="text-sm mb-2" style={{color:"#78716c"}}>
-          Guarda esse código e vem na <strong>{nextDayShort} ({nextDateStr})</strong> resgatar com o garçom! 😄
+          Guarda esse código e vem resgatar com o garçom nas <strong>{daysText}</strong>! 😄
         </p>
-        <p className="text-xs" style={{color:"#A88830"}}>
-          💡 Seu código fica salvo e não vai a lugar nenhum até lá!
+        <p className="text-xs" style={{color:"#C41E1E"}}>
+          ⚠️ Válido somente para consumo no local.
         </p>
       </div>
     );

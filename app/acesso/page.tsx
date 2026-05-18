@@ -11,14 +11,25 @@ type RecentEntry = { code: string; customer_name: string; prize_name: string; re
 type Session = { role: string; userName: string; userId: string | null; };
 type SuccessInfo = { customerName: string; prizeName: string; };
 
-// ── jsQR loader (works on Safari/iPhone) ─────────────────────────
+// ── jsQR loader via script tag (Safari compatible) ───────────────
 let jsQRLib: ((data: Uint8ClampedArray, w: number, h: number) => { data: string } | null) | null = null;
-async function loadJsQR() {
-  if (jsQRLib) return jsQRLib;
-  // @ts-expect-error — dynamic CDN import
-  const mod = await import("https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js");
-  jsQRLib = mod.default || mod;
-  return jsQRLib;
+function loadJsQR(): Promise<typeof jsQRLib> {
+  return new Promise((resolve) => {
+    if (jsQRLib) { resolve(jsQRLib); return; }
+    // Check if already loaded globally
+    if (typeof (window as unknown as Record<string,unknown>).jsQR === "function") {
+      jsQRLib = (window as unknown as Record<string,unknown>).jsQR as typeof jsQRLib;
+      resolve(jsQRLib); return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js";
+    script.onload = () => {
+      jsQRLib = (window as unknown as Record<string,unknown>).jsQR as typeof jsQRLib;
+      resolve(jsQRLib);
+    };
+    script.onerror = () => resolve(null);
+    document.head.appendChild(script);
+  });
 }
 
 // ── Code formatting helpers ───────────────────────────────────────
@@ -274,21 +285,26 @@ export default function AcessoPage() {
       <div className="rounded-xl bg-orange-50 border border-orange-200 p-4">
         <p className="font-semibold text-orange-700">📅 Ops! Hoje não é dia desse prêmio</p>
         <p className="text-sm text-orange-600 mt-1">Prêmio: <strong>{result.prizeName}</strong></p>
-        <p className="text-sm text-orange-600 mt-1">Dias permitidos: <strong>{result.validDaysText}</strong></p>
-        {result.nextValidDate && <p className="text-xs text-orange-500 mt-2">😊 Volta na {result.nextValidDate} que a gente resgata!</p>}
+        <p className="text-sm text-orange-600 mt-1">Dias de resgate: <strong>{result.validDaysText}</strong></p>
+        <p className="text-xs text-orange-500 mt-2">⚠️ Válido somente para consumo no local.</p>
       </div>
     );
     const remH = result.expiresAt ? Math.ceil((new Date(result.expiresAt).getTime() - Date.now()) / 3600000) : 0;
     return (
       <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-4">
         <p className="font-semibold text-emerald-700 text-lg mb-3">✓ Código válido!</p>
-        <div className="space-y-1 text-sm text-emerald-700 mb-4">
+        <div className="space-y-1 text-sm text-emerald-700 mb-3">
           <p>Cliente: <strong>{result.customerName}</strong></p>
           <p>Telefone: {result.customerPhone || "—"}</p>
           <p>Prêmio: <strong>{result.prizeName}</strong></p>
-          {result.prizeHow && <p className="text-xs text-emerald-600 mt-1">{result.prizeHow}</p>}
           <p className="text-xs text-emerald-500">Expira em {remH}h · {result.expiresAt ? new Date(result.expiresAt).toLocaleString("pt-BR") : ""}</p>
         </div>
+        {result.validDaysText && result.validDaysText !== "Todos os dias" && (
+          <div className="bg-emerald-100 rounded-xl p-3 mb-3 text-xs text-emerald-700">
+            <p>📅 Resgate válido: <strong>{result.validDaysText}</strong></p>
+            <p className="mt-0.5">⚠️ Válido somente para consumo no local.</p>
+          </div>
+        )}
         <button className="btn-primary w-full" onClick={redeem} disabled={confirming}>
           {confirming ? "Confirmando..." : "✓ Confirmar resgate"}
         </button>
