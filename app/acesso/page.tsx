@@ -150,13 +150,29 @@ export default function AcessoPage() {
         video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-      setScannerStatus("Aponte para o QR Code do cliente");
-      // Pre-load jsQR
+
+      // Pre-load jsQR while camera starts
       await loadJsQR();
+
+      const video = videoRef.current;
+      if (!video) return;
+
+      video.srcObject = stream;
+      video.setAttribute("playsinline", "true"); // required for iOS Safari
+      video.setAttribute("muted", "true");
+
+      // Wait for video to be ready before playing — fixes Safari iOS issue
+      await new Promise<void>((resolve, reject) => {
+        video.oncanplay = () => resolve();
+        video.onerror  = () => reject(new Error("video error"));
+        // Fallback timeout in case canplay never fires
+        setTimeout(resolve, 3000);
+        video.load();
+      });
+
+      try { await video.play(); } catch { /* Safari may throw on play() — ignore */ }
+
+      setScannerStatus("Aponte para o QR Code do cliente");
       scanningRef.current = true;
       requestAnimationFrame(scanFrame);
     } catch {
