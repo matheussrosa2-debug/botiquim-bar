@@ -99,14 +99,23 @@ export default function AcessoPage() {
     } catch {}
   }
 
+  const codeInputRef = useRef<HTMLInputElement>(null);
+
   async function validate(code?: string) {
-    const raw  = code || codeInput;
+    // Read directly from DOM input as fallback — React state may lag on mobile
+    const domValue = codeInputRef.current?.value?.trim().toUpperCase() || "";
+    const raw  = code || codeInput || domValue;
     const full = buildFullCode(raw);
-    if (!full || full === "BTQ-") return;
+    if (!full || full === "BTQ-" || full.length < 9) return;
     setValidating(true); setResult(null); setSuccessInfo(null);
-    const res = await fetch(`/api/codes/validate?code=${full}`);
-    const d   = await res.json();
-    setResult(d); setValidating(false);
+    try {
+      const res = await fetch(`/api/codes/validate?code=${encodeURIComponent(full)}`);
+      const d   = await res.json();
+      setResult(d);
+    } catch {
+      setResult({ found: false });
+    }
+    setValidating(false);
     if (code) setCodeInput(full.replace("BTQ-", ""));
   }
 
@@ -395,6 +404,7 @@ export default function AcessoPage() {
                 className="flex-1 px-3 py-3 text-lg font-mono font-bold tracking-widest uppercase bg-white outline-none"
                 maxLength={5}
                 placeholder="XXXXX"
+                ref={codeInputRef}
                 value={codeInput}
                 onChange={handleCodeChange}
                 onKeyDown={e => e.key === "Enter" && validate()}
