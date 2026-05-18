@@ -11,13 +11,43 @@ type RecentEntry = { code: string; customer_name: string; prize_name: string; re
 type Session = { role: string; userName: string; userId: string | null; };
 type SuccessInfo = { customerName: string; prizeName: string; };
 
+// ── jsQR loader (works on Safari/iPhone) ─────────────────────────
+let jsQRLib: ((data: Uint8ClampedArray, w: number, h: number) => { data: string } | null) | null = null;
+async function loadJsQR() {
+  if (jsQRLib) return jsQRLib;
+  // @ts-expect-error — dynamic CDN import
+  const mod = await import("https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js");
+  jsQRLib = mod.default || mod;
+  return jsQRLib;
+}
+
+// ── Code formatting helpers ───────────────────────────────────────
+function formatCodeInput(raw: string): string {
+  // Remove everything that isn't alphanumeric
+  const clean = raw.replace(/[^A-Z0-9]/gi, "").toUpperCase();
+  // If user typed the full code with prefix, keep as-is
+  if (clean.startsWith("BTQ") && clean.length > 3) {
+    const rest = clean.slice(3).slice(0, 5);
+    return rest.length > 0 ? `BTQ-${rest}` : "BTQ-";
+  }
+  // Otherwise treat as suffix only (max 5 chars)
+  return clean.slice(0, 5);
+}
+
+function buildFullCode(input: string): string {
+  const up = input.trim().toUpperCase();
+  if (up.startsWith("BTQ-")) return up;
+  if (up.startsWith("BTQ")) return `BTQ-${up.slice(3)}`;
+  return `BTQ-${up}`;
+}
+
 export default function AcessoPage() {
-  const [session, setSession]     = useState<Session | null>(null);
-  const [loading, setLoading]     = useState(true);
-  const [username, setUsername]   = useState("");
-  const [password, setPassword]   = useState("");
-  const [loginErr, setLoginErr]   = useState("");
-  const [logging, setLogging]     = useState(false);
+  const [session, setSession]       = useState<Session | null>(null);
+  const [loading, setLoading]       = useState(true);
+  const [username, setUsername]     = useState("");
+  const [password, setPassword]     = useState("");
+  const [loginErr, setLoginErr]     = useState("");
+  const [logging, setLogging]       = useState(false);
 
   const [codeInput, setCodeInput]   = useState("");
   const [result, setResult]         = useState<CodeResult | null>(null);
@@ -29,10 +59,11 @@ export default function AcessoPage() {
   // QR Scanner
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scannerErr, setScannerErr]   = useState("");
-  const videoRef    = useRef<HTMLVideoElement>(null);
-  const canvasRef   = useRef<HTMLCanvasElement>(null);
-  const streamRef   = useRef<MediaStream | null>(null);
-  const scanningRef = useRef(false);
+  const [scannerStatus, setScannerStatus] = useState("Aponte para o QR Code do cliente");
+  const videoRef     = useRef<HTMLVideoElement>(null);
+  const canvasRef    = useRef<HTMLCanvasElement>(null);
+  const streamRef    = useRef<MediaStream | null>(null);
+  const scanningRef  = useRef(false);
   const animFrameRef = useRef<number>(0);
 
   useEffect(() => {
@@ -69,25 +100,26 @@ export default function AcessoPage() {
   }
 
   async function validate(code?: string) {
-    const c = (code || codeInput).trim().toUpperCase();
-    if (!c) return;
+    const raw  = code || codeInput;
+    const full = buildFullCode(raw);
+    if (!full || full === "BTQ-") return;
     setValidating(true); setResult(null); setSuccessInfo(null);
-    const res = await fetch(`/api/codes/validate?code=${c}`);
+    const res = await fetch(`/api/codes/validate?code=${full}`);
     const d   = await res.json();
     setResult(d); setValidating(false);
-    if (code) setCodeInput(c);
+    if (code) setCodeInput(full.replace("BTQ-", ""));
   }
 
   async function redeem() {
     if (!result) return;
+    const full = buildFullCode(codeInput);
     setConfirming(true);
     const res = await fetch("/api/codes/redeem", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: codeInput.trim().toUpperCase() }),
+      body: JSON.stringify({ code: full }),
     });
     const d = await res.json();
     setConfirming(false);
-
     if (res.ok) {
       setSuccessInfo({ customerName: d.customerName || result.customerName || "Cliente", prizeName: d.prizeName || result.prizeName || "Prêmio" });
       setResult(null); setCodeInput("");
@@ -98,7 +130,7 @@ export default function AcessoPage() {
     }
   }
 
-  // ── QR Scanner ────────────────────────────────────────────────────
+  // ── QR Scanner (jsQR — funciona no Safari/iPhone) ────────────────
   const stopScanner = useCallback(() => {
     scanningRef.current = false;
     cancelAnimationFrame(animFrameRef.current);
@@ -108,10 +140,11 @@ export default function AcessoPage() {
     }
     setScannerOpen(false);
     setScannerErr("");
+    setScannerStatus("Aponte para o QR Code do cliente");
   }, []);
 
   async function startScanner() {
-    setScannerErr(""); setScannerOpen(true);
+    setScannerErr(""); setScannerOpen(true); setScannerStatus("Iniciando câmera...");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -119,20 +152,24 @@ export default function AcessoPage() {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        await videoRef.current.play();
       }
+      setScannerStatus("Aponte para o QR Code do cliente");
+      // Pre-load jsQR
+      await loadJsQR();
       scanningRef.current = true;
-      scanFrame();
-    } catch (e) {
+      requestAnimationFrame(scanFrame);
+    } catch {
       setScannerErr("Não foi possível acessar a câmera. Verifique as permissões do navegador.");
       setScannerOpen(false);
     }
   }
 
-  function scanFrame() {
+  async function scanFrame() {
     if (!scanningRef.current) return;
     const video  = videoRef.current;
     const canvas = canvasRef.current;
+
     if (!video || !canvas || video.readyState < 2) {
       animFrameRef.current = requestAnimationFrame(scanFrame);
       return;
@@ -144,32 +181,39 @@ export default function AcessoPage() {
     if (!ctx) return;
     ctx.drawImage(video, 0, 0);
 
-    // Use BarcodeDetector if available (modern browsers)
-    if ("BarcodeDetector" in window) {
-      const detector = new (window as unknown as { BarcodeDetector: new (opts: unknown) => { detect: (img: unknown) => Promise<Array<{ rawValue: string }>> } }).BarcodeDetector({ formats: ["qr_code"] });
-      detector.detect(canvas).then((barcodes: Array<{ rawValue: string }>) => {
-        if (barcodes.length > 0) {
-          const raw = barcodes[0].rawValue;
-          // Extract BTQ code from URL or use raw value
-          const match = raw.match(/BTQ-[A-Z0-9]{5}/);
-          const code  = match ? match[0] : raw.toUpperCase();
-          if (code.startsWith("BTQ-") && code.length === 9) {
-            stopScanner();
-            validate(code);
-            return;
-          }
+    try {
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const qr        = jsQRLib ? jsQRLib(imageData.data, canvas.width, canvas.height) : null;
+
+      if (qr?.data) {
+        const raw   = qr.data;
+        const match = raw.match(/BTQ-[A-Z0-9]{5}/);
+        const code  = match ? match[0] : buildFullCode(raw);
+
+        if (code.startsWith("BTQ-") && code.length === 9) {
+          stopScanner();
+          validate(code);
+          return;
         }
+      }
+    } catch {}
+
+    if (scanningRef.current) {
+      // Scan at ~10fps to save battery on mobile
+      setTimeout(() => {
         if (scanningRef.current) animFrameRef.current = requestAnimationFrame(scanFrame);
-      }).catch(() => {
-        if (scanningRef.current) animFrameRef.current = requestAnimationFrame(scanFrame);
-      });
-    } else {
-      // Fallback: scan every 500ms without BarcodeDetector
-      setTimeout(() => { if (scanningRef.current) animFrameRef.current = requestAnimationFrame(scanFrame); }, 500);
+      }, 100);
     }
   }
 
   useEffect(() => () => stopScanner(), [stopScanner]);
+
+  function handleCodeChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const raw       = e.target.value.replace(/[^A-Z0-9]/gi, "").toUpperCase().slice(0, 5);
+    setCodeInput(raw);
+    setResult(null);
+    setSuccessInfo(null);
+  }
 
   function ResultBox() {
     if (!result) return null;
@@ -194,10 +238,10 @@ export default function AcessoPage() {
     );
     if (result.dayInvalid) return (
       <div className="rounded-xl bg-orange-50 border border-orange-200 p-4">
-        <p className="font-semibold text-orange-700">📅 Dia de resgate inválido</p>
+        <p className="font-semibold text-orange-700">📅 Ops! Hoje não é dia desse prêmio</p>
         <p className="text-sm text-orange-600 mt-1">Prêmio: <strong>{result.prizeName}</strong></p>
         <p className="text-sm text-orange-600 mt-1">Dias permitidos: <strong>{result.validDaysText}</strong></p>
-        {result.nextValidDate && <p className="text-xs text-orange-500 mt-1">Próximo dia disponível: {result.nextValidDate}</p>}
+        {result.nextValidDate && <p className="text-xs text-orange-500 mt-2">😊 Volta na {result.nextValidDate} que a gente resgata!</p>}
       </div>
     );
     const remH = result.expiresAt ? Math.ceil((new Date(result.expiresAt).getTime() - Date.now()) / 3600000) : 0;
@@ -292,22 +336,21 @@ export default function AcessoPage() {
         {scannerOpen && (
           <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center">
             <div className="relative w-full max-w-sm">
-              <video ref={videoRef} className="w-full rounded-xl" playsInline muted />
+              <video ref={videoRef} className="w-full rounded-xl" playsInline muted autoPlay />
               <canvas ref={canvasRef} className="hidden" />
               {/* Crosshair overlay */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-56 h-56 border-4 border-orange-400 rounded-2xl opacity-80">
-                  <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-orange-400 rounded-tl-xl" />
-                  <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-orange-400 rounded-tr-xl" />
-                  <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-orange-400 rounded-bl-xl" />
-                  <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-orange-400 rounded-br-xl" />
+                <div className="relative w-56 h-56">
+                  <div className="absolute inset-0 border-2 border-white/20 rounded-2xl" />
+                  <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-orange-400 rounded-tl-xl" />
+                  <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-orange-400 rounded-tr-xl" />
+                  <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-orange-400 rounded-bl-xl" />
+                  <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-orange-400 rounded-br-xl" />
                 </div>
               </div>
-              <p className="absolute bottom-4 left-0 right-0 text-center text-white text-sm opacity-80">
-                Aponte a câmera para o QR Code do cliente
-              </p>
             </div>
-            {scannerErr && <p className="text-red-400 text-sm mt-4 px-6 text-center">{scannerErr}</p>}
+            <p className="text-white text-sm mt-4 opacity-80">{scannerStatus}</p>
+            {scannerErr && <p className="text-red-400 text-sm mt-2 px-6 text-center">{scannerErr}</p>}
             <button onClick={stopScanner} className="mt-6 px-8 py-3 bg-zinc-800 text-white rounded-xl text-sm">
               Cancelar
             </button>
@@ -318,15 +361,28 @@ export default function AcessoPage() {
         <div className="card mb-4">
           <label className="label">Código do prêmio</label>
           <div className="flex gap-2 mb-2">
-            <input
-              className="input font-mono tracking-widest text-lg uppercase flex-1"
-              maxLength={9}
-              placeholder="BTQ-XXXXX"
-              value={codeInput}
-              onChange={e => { setCodeInput(e.target.value.toUpperCase()); setResult(null); setSuccessInfo(null); }}
-              onKeyDown={e => e.key === "Enter" && validate()}
-            />
-            <button className="btn-secondary px-4" onClick={() => validate()} disabled={validating}>
+            {/* Prefix label + input */}
+            <div className="flex flex-1 items-center border rounded-xl overflow-hidden bg-white" style={{borderColor:"#E8E2D9"}}>
+              <span className="px-3 py-3 text-sm font-mono font-bold text-zinc-400 bg-zinc-50 border-r select-none" style={{borderColor:"#E8E2D9"}}>
+                BTQ-
+              </span>
+              <input
+                className="flex-1 px-3 py-3 text-lg font-mono font-bold tracking-widest uppercase bg-white outline-none"
+                maxLength={5}
+                placeholder="XXXXX"
+                value={codeInput}
+                onChange={handleCodeChange}
+                onKeyDown={e => e.key === "Enter" && validate()}
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+              />
+            </div>
+            <button
+              className="btn-secondary px-5 font-semibold"
+              onClick={() => validate()}
+              disabled={validating || codeInput.length < 5}
+            >
               {validating ? "..." : "Validar"}
             </button>
           </div>
