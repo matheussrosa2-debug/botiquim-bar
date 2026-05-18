@@ -49,7 +49,15 @@ function isPrizeEligible(prize: Prize, totalCustomers: number, hour: number): bo
   switch (prize.limit_type) {
     case "per_registrations":
       if (!prize.limit_every_n_registrations) return true;
-      return totalCustomers > 0 && totalCustomers % prize.limit_every_n_registrations === 0;
+      // ── FIXED LOGIC ──────────────────────────────────────────────
+      // Prize becomes eligible once the threshold is reached and stays
+      // eligible until it is issued. This guarantees it will eventually
+      // be drawn instead of relying on a single exact modulo hit.
+      //
+      // How many times should it have been issued by now?
+      const expectedIssued = Math.floor(totalCustomers / prize.limit_every_n_registrations);
+      // It's eligible if it has been issued fewer times than expected
+      return prize.issued_count < expectedIssued;
 
     case "per_period":
       const count =
@@ -82,35 +90,47 @@ export async function serverSpin(cpfClean: string, type: "wheel" | "birthday" = 
   const hour = new Date().getHours();
   const total = totalCustomers ?? 0;
 
-  // Build eligible pool (with fallback resolution)
-  const ineligibleIds = new Set<string>();
-  for (const p of allPrizes) {
-    if (!isPrizeEligible(p, total, hour)) ineligibleIds.add(p.id);
-  }
+  // Separate prizes into two pools:
+  // 1. "guaranteed" — per_registrations prizes that are overdue (must come out)
+  // 2. "normal" — all other eligible prizes
+  const guaranteed: Prize[] = [];
+  const normal: Prize[] = [];
 
-  const eligible = allPrizes.filter(p => {
-    if (!ineligibleIds.has(p.id)) return true;
-    if (p.fallback_prize_id && !ineligibleIds.has(p.fallback_prize_id)) return false; // fallback handles it
-    return false;
-  });
-
-  // Add fallbacks for ineligible prizes
   for (const p of allPrizes) {
-    if (ineligibleIds.has(p.id) && p.fallback_prize_id) {
-      const fb = allPrizes.find(x => x.id === p.fallback_prize_id);
-      if (fb && !eligible.find(x => x.id === fb.id)) eligible.push(fb);
+    if (p.limit_type === "per_registrations" && p.limit_every_n_registrations) {
+      const expectedIssued = Math.floor(total / p.limit_every_n_registrations);
+      if (p.issued_count < expectedIssued) {
+        guaranteed.push(p);
+        continue;
+      }
+    }
+    // Check other eligibility
+    if (isPrizeEligible(p, total, hour)) {
+      normal.push(p);
     }
   }
 
-  const pool = eligible.length > 0 ? eligible : allPrizes; // never empty
+  let selected: Prize;
 
-  // Weighted random pick
-  const totalWeight = pool.reduce((s, p) => s + (p.weight || 10), 0);
-  let rand = Math.random() * totalWeight;
-  let selected = pool[0];
-  for (const p of pool) {
-    rand -= p.weight || 10;
-    if (rand <= 0) { selected = p; break; }
+  if (guaranteed.length > 0) {
+    // If multiple guaranteed prizes, pick the one most overdue
+    // (highest ratio of expected vs actual)
+    guaranteed.sort((a, b) => {
+      const ratioA = (Math.floor(total / (a.limit_every_n_registrations || 1)) - a.issued_count);
+      const ratioB = (Math.floor(total / (b.limit_every_n_registrations || 1)) - b.issued_count);
+      return ratioB - ratioA;
+    });
+    selected = guaranteed[0];
+  } else {
+    // Normal weighted random pick from eligible pool
+    const pool = normal.length > 0 ? normal : allPrizes;
+    const totalWeight = pool.reduce((s, p) => s + (p.weight || 10), 0);
+    let rand = Math.random() * totalWeight;
+    selected = pool[0];
+    for (const p of pool) {
+      rand -= p.weight || 10;
+      if (rand <= 0) { selected = p; break; }
+    }
   }
 
   // Update counters
@@ -144,16 +164,16 @@ export async function serverSpin(cpfClean: string, type: "wheel" | "birthday" = 
 
   await db.from("prize_codes").insert({
     code,
-    customer_cpf:        cpfClean,
-    customer_name:       customer?.name ?? "",
-    customer_phone:      customer?.phone ?? "",
-    prize_name:          selected.name,
-    prize_how:           selected.how,
+    customer_cpf:         cpfClean,
+    customer_name:        customer?.name ?? "",
+    customer_phone:       customer?.phone ?? "",
+    prize_name:           selected.name,
+    prize_how:            selected.how,
     prize_validity_hours: selected.validity_hours || 24,
-    expires_at:          expiresAt.toISOString(),
+    expires_at:           expiresAt.toISOString(),
     type,
-    event_id:            customer?.event_id   ?? null,
-    event_name:          customer?.event_name ?? null,
+    event_id:             customer?.event_id   ?? null,
+    event_name:           customer?.event_name ?? null,
   });
 
   // Update customer with code
