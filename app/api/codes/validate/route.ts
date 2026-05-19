@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
   // Query 1: get the prize code — simple, no JOIN
   const { data, error } = await db
     .from("prize_codes")
-    .select("id, code, customer_name, redeemed, redeemed_at, expires_at, prize_name, prize_how, customer_cpf")
+    .select("id, code, customer_name, redeemed, redeemed_at, redeemed_by_name, redeemed_by, expires_at, prize_name, prize_how, customer_cpf")
     .eq("code", code.toUpperCase().trim())
     .maybeSingle();
 
@@ -95,8 +95,10 @@ export async function GET(req: NextRequest) {
     prizeName:     data.prize_name,
     prizeHow:      data.prize_how || "",
     expiresAt:     data.expires_at,
-    redeemedAt:    data.redeemed_at || null,
-    validDaysText: dayCheck.validDaysText,
-    nextValidDate: dayCheck.nextValidDate,
+    redeemedAt:      data.redeemed_at || null,
+    redeemedByName:  data.redeemed_by_name || null,
+    redeemedByRole:  data.redeemed_by || null,
+    validDaysText:   dayCheck.validDaysText,
+    nextValidDate:   dayCheck.nextValidDate,
   });
 }
