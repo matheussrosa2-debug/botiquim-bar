@@ -6,6 +6,7 @@ type CodeResult = {
   dayInvalid?: boolean; validDaysText?: string; nextValidDate?: string;
   customerName?: string; customerPhone?: string; prizeName?: string; prizeHow?: string;
   expiresAt?: string; redeemedAt?: string; code?: string;
+  redeemedByName?: string | null; redeemedByRole?: string | null;
 };
 type RecentEntry = { code: string; customer_name: string; prize_name: string; redeemed_at: string; };
 type Session = { role: string; userName: string; userId: string | null; };
@@ -272,7 +273,23 @@ export default function AcessoPage() {
       <div className="rounded-xl bg-amber-50 border border-amber-200 p-4">
         <p className="font-semibold text-amber-700">⚠ Código já utilizado</p>
         <p className="text-sm text-amber-600 mt-1">Prêmio: <strong>{result.prizeName}</strong></p>
-        <p className="text-xs text-amber-500 mt-0.5">Resgatado em {result.redeemedAt ? new Date(result.redeemedAt).toLocaleString("pt-BR") : "—"}</p>
+        <p className="text-xs text-amber-500 mt-0.5">
+          Resgatado em {result.redeemedAt ? new Date(result.redeemedAt).toLocaleString("pt-BR") : "—"}
+        </p>
+        {session?.role === "manager" && (
+          <div className="mt-2 pt-2 border-t border-amber-200">
+            <p className="text-xs font-semibold text-amber-700 mb-1">🔍 Informações de resgate</p>
+            <p className="text-xs text-amber-600">
+              Validado por: <strong>{result.redeemedByName || "—"}</strong>
+              {result.redeemedByRole && (
+                <span className="ml-1 text-amber-400">({result.redeemedByRole === "manager" ? "Gestor" : "Funcionário"})</span>
+              )}
+            </p>
+            <p className="text-xs text-amber-600 mt-0.5">
+              Data/hora: <strong>{result.redeemedAt ? new Date(result.redeemedAt).toLocaleString("pt-BR") : "—"}</strong>
+            </p>
+          </div>
+        )}
       </div>
     );
     if (result.expired) return (
