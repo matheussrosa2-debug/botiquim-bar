@@ -7,6 +7,7 @@ type CodeResult = {
   customerName?: string; customerPhone?: string; prizeName?: string; prizeHow?: string;
   expiresAt?: string; redeemedAt?: string; code?: string;
   redeemedByName?: string | null; redeemedByRole?: string | null;
+  _redeemError?: string;
 };
 type RecentEntry = { code: string; customer_name: string; prize_name: string; redeemed_at: string; };
 type Session = { role: string; userName: string; userId: string | null; };
@@ -147,7 +148,9 @@ export default function AcessoPage() {
       loadRecent(session?.userId);
       setTimeout(() => setSuccessInfo(null), 4000);
     } else {
-      setResult(r => r ? { ...r, redeemed: true, valid: false } : r);
+      // Show error message but don't mark as redeemed — let user try again
+      const errMsg = d.error || "Erro ao confirmar resgate. Tente novamente.";
+      setResult(r => r ? { ...r, _redeemError: errMsg } as CodeResult : r);
     }
   }
 
@@ -321,6 +324,9 @@ export default function AcessoPage() {
             <p>📅 Resgate válido: <strong>{result.validDaysText}</strong></p>
             <p className="mt-0.5">⚠️ Válido somente para consumo no local.</p>
           </div>
+        )}
+        {(result as CodeResult & {_redeemError?:string})._redeemError && (
+          <p className="text-sm text-red-600 mb-2">{(result as CodeResult & {_redeemError?:string})._redeemError}</p>
         )}
         <button className="btn-primary w-full" onClick={redeem} disabled={confirming}>
           {confirming ? "Confirmando..." : "✓ Confirmar resgate"}
