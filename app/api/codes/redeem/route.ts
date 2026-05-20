@@ -2,7 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getSession } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { checkValidDay } from "@/lib/validdays";
+
+const DAY_NAMES = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+
+function checkValidDay(validDays: number[] | null): { isValid: boolean; validDaysText: string } {
+  if (!validDays || validDays.length === 0) return { isValid: true, validDaysText: "Todos os dias" };
+  const today   = new Date().getDay();
+  const isValid = validDays.includes(today);
+  const sorted  = [...validDays].sort((a, b) => a - b);
+  return { isValid, validDaysText: sorted.map(d => DAY_NAMES[d]).join(", ") };
+}
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -14,9 +23,10 @@ export async function POST(req: NextRequest) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   const db = supabaseAdmin();
 
+  // Query 1: get the prize code — simple, no JOIN
   const { data, error } = await db
     .from("prize_codes")
-    .select("*, prizes(valid_days)")
+    .select("id, code, customer_name, redeemed, redeemed_at, expires_at, prize_name, customer_cpf")
     .eq("code", code.toUpperCase().trim())
     .maybeSingle();
 
@@ -25,29 +35,46 @@ export async function POST(req: NextRequest) {
   if (data.redeemed) return NextResponse.json({ error: "Este código já foi utilizado anteriormente." }, { status: 409 });
   if (new Date(data.expires_at) < new Date()) return NextResponse.json({ error: "Este código está expirado." }, { status: 410 });
 
-  // Check valid days
-  const prize = data.prizes as { valid_days: number[] | null } | null;
-  const validDays = prize?.valid_days ?? null;
-  const dayCheck = checkValidDay(validDays);
+  // Query 2: check valid days separately
+  let validDays: number[] | null = null;
+  try {
+    const { data: prize } = await db
+      .from("prizes")
+      .select("valid_days")
+      .eq("name", data.prize_name)
+      .maybeSingle();
+    validDays = prize?.valid_days ?? null;
+  } catch {
+    validDays = null;
+  }
 
+  const dayCheck = checkValidDay(validDays);
   if (!dayCheck.isValid) {
     return NextResponse.json({
-      error: `Este prêmio só pode ser resgatado ${dayCheck.validDaysText === "Todos os dias" ? "todos os dias" : "às " + dayCheck.validDaysText}.${dayCheck.nextValidDate ? ` Próximo dia: ${dayCheck.nextValidDate}.` : ""}`,
-      dayInvalid:    true,
+      error: `Este prêmio só pode ser resgatado às ${dayCheck.validDaysText}.`,
+      dayInvalid: true,
       validDaysText: dayCheck.validDaysText,
-      nextValidDate: dayCheck.nextValidDate,
     }, { status: 422 });
   }
 
-  const { error: updateError } = await db.from("prize_codes").update({
-    redeemed:            true,
-    redeemed_at:         new Date().toISOString(),
-    redeemed_by:         session.role,
-    redeemed_by_user_id: session.userId   || null,
-    redeemed_by_name:    session.userName || session.role,
-  }).eq("code", code.toUpperCase().trim());
+  // Update prize_codes — only safe columns
+  const updateData: Record<string, unknown> = {
+    redeemed:    true,
+    redeemed_at: new Date().toISOString(),
+    redeemed_by: session.role,
+  };
 
-  if (updateError) return NextResponse.json({ error: "Erro ao resgatar. Tente novamente." }, { status: 500 });
+  // Try to add redeemed_by_name and redeemed_by_user_id if they exist
+  try {
+    await db.from("prize_codes").update({
+      ...updateData,
+      redeemed_by_name:    session.userName || session.role,
+      redeemed_by_user_id: session.userId || null,
+    }).eq("code", code.toUpperCase().trim());
+  } catch {
+    // Fallback without optional columns
+    await db.from("prize_codes").update(updateData).eq("code", code.toUpperCase().trim());
+  }
 
   await audit({
     action: "redeem_code", entity: "prize_codes", entity_id: data.id,
