@@ -39,10 +39,10 @@ export async function GET(req: NextRequest) {
 
   const db = supabaseAdmin();
 
-  // Query 1: get the prize code — simple, no JOIN
+  // Query 1: get the prize code — safe select without optional columns
   const { data, error } = await db
     .from("prize_codes")
-    .select("id, code, customer_name, redeemed, redeemed_at, redeemed_by_name, redeemed_by, expires_at, prize_name, prize_how, customer_cpf")
+    .select("id, code, customer_name, redeemed, redeemed_at, expires_at, prize_name, prize_how, customer_cpf")
     .eq("code", code.toUpperCase().trim())
     .maybeSingle();
 
@@ -54,7 +54,24 @@ export async function GET(req: NextRequest) {
 
   const expired = new Date(data.expires_at) < new Date();
 
-  // Query 2: get prize valid_days separately by name — no foreign key needed
+  // Query 2: get redeemed_by_name separately — safe, won't break if column missing
+  let redeemedByName: string | null = null;
+  let redeemedByRole: string | null = null;
+  if (data.redeemed) {
+    try {
+      const { data: codeExtra } = await db
+        .from("prize_codes")
+        .select("redeemed_by_name, redeemed_by")
+        .eq("code", code.toUpperCase().trim())
+        .maybeSingle();
+      redeemedByName = codeExtra?.redeemed_by_name || null;
+      redeemedByRole = codeExtra?.redeemed_by || null;
+    } catch {
+      // Column may not exist yet — ignore
+    }
+  }
+
+  // Query 3: get prize valid_days by name
   let validDays: number[] | null = null;
   try {
     const { data: prize } = await db
@@ -64,11 +81,10 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
     validDays = prize?.valid_days ?? null;
   } catch {
-    // If prize lookup fails, allow all days
     validDays = null;
   }
 
-  // Query 3: get customer phone separately
+  // Query 4: get customer phone
   let customerPhone = "—";
   try {
     const { data: customer } = await db
@@ -84,21 +100,21 @@ export async function GET(req: NextRequest) {
   const dayCheck = checkValidDay(validDays);
 
   return NextResponse.json({
-    found:         true,
-    valid:         !data.redeemed && !expired && dayCheck.isValid,
-    redeemed:      data.redeemed,
+    found:          true,
+    valid:          !data.redeemed && !expired && dayCheck.isValid,
+    redeemed:       data.redeemed,
     expired,
-    dayInvalid:    !dayCheck.isValid,
-    code:          data.code,
-    customerName:  data.customer_name || "—",
+    dayInvalid:     !dayCheck.isValid,
+    code:           data.code,
+    customerName:   data.customer_name || "—",
     customerPhone,
-    prizeName:     data.prize_name,
-    prizeHow:      data.prize_how || "",
-    expiresAt:     data.expires_at,
-    redeemedAt:      data.redeemed_at || null,
-    redeemedByName:  data.redeemed_by_name || null,
-    redeemedByRole:  data.redeemed_by || null,
-    validDaysText:   dayCheck.validDaysText,
-    nextValidDate:   dayCheck.nextValidDate,
+    prizeName:      data.prize_name,
+    prizeHow:       data.prize_how || "",
+    expiresAt:      data.expires_at,
+    redeemedAt:     data.redeemed_at || null,
+    redeemedByName,
+    redeemedByRole,
+    validDaysText:  dayCheck.validDaysText,
+    nextValidDate:  dayCheck.nextValidDate,
   });
 }
