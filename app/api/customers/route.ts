@@ -16,9 +16,15 @@ function safeStringify(obj: unknown): string {
     .replace(/\u2029/g, "\\u2029");
 }
 
-// Rate limit: max 5 registrations per IP per hour
+// Rate limit: max 5 registrations per IP per hour (normal)
+// Durante evento ativo: 500 por hora (festa com WiFi compartilhado)
 async function checkRegistrationRateLimit(ip: string): Promise<boolean> {
   try {
+    // Verificar se há evento ativo para usar limite maior
+    const { data: activeEvent } = await supabaseAdmin()
+      .from("events").select("id").eq("active", true).maybeSingle();
+    const limit = activeEvent ? 500 : 5;
+
     const since = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const { count } = await supabaseAdmin()
       .from("login_attempts")
@@ -26,7 +32,7 @@ async function checkRegistrationRateLimit(ip: string): Promise<boolean> {
       .eq("ip", ip)
       .eq("role", "registration")
       .gte("attempted_at", since);
-    return (count ?? 0) < 5;
+    return (count ?? 0) < limit;
   } catch { return true; }
 }
 
