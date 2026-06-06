@@ -26,6 +26,7 @@ export type SpinResult = {
   allPrizes: Prize[];
   code: string;
   expiresAt: string;
+  already_played?: boolean;
 };
 
 function calcExpiry(prize: Prize): Date {
@@ -89,6 +90,36 @@ function isPrizeEligible(prize: Prize, totalCustomers: number, hour: number): bo
 
 export async function serverSpin(cpfClean: string, type: "wheel" | "birthday" = "wheel"): Promise<SpinResult> {
   const db = supabaseAdmin();
+
+  // ── VERIFICAÇÃO: já participou hoje? ─────────────────────────
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const { data: existingCode } = await db
+    .from("prize_codes")
+    .select("code, prize_name, expires_at, prize_how")
+    .eq("customer_cpf", cpfClean)
+    .gte("created_at", startOfDay.toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingCode) {
+    // Já participou hoje — retorna o prêmio anterior
+    const [{ data: prizes }] = await Promise.all([
+      db.from("prizes").select("*").eq("enabled", true).order("weight", { ascending: false }),
+    ]);
+    const allPrizes = (prizes || []) as Prize[];
+    const fakePrize = allPrizes.find(p => p.name === existingCode.prize_name) || allPrizes[0];
+    return {
+      prize: fakePrize,
+      targetIndex: 0,
+      allPrizes,
+      code: existingCode.code,
+      expiresAt: existingCode.expires_at,
+      already_played: true,
+    };
+  }
 
   const [{ data: prizes }, { count: totalCustomers }] = await Promise.all([
     db.from("prizes").select("*").eq("enabled", true).order("weight", { ascending: false }),

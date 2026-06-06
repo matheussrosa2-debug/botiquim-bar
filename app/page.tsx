@@ -38,6 +38,7 @@ export default function Home() {
   const [wonPrize, setWonPrize]     = useState<Prize | null>(null);
   const [wonCode, setWonCode]       = useState("");
   const [wonExpiry, setWonExpiry]   = useState("");
+  const [alreadyPlayed, setAlreadyPlayed] = useState(false);
   const [spinLoading, setSpinLoading] = useState(false);
   const [firstName, setFirstName]   = useState("");
   const [netErr, setNetErr]         = useState("");
@@ -183,6 +184,13 @@ export default function Home() {
       const data = await res.json();
       setWonPrize(data.prize); setWonCode(data.code);
       setWonExpiry(data.expires_at ? new Date(data.expires_at).toLocaleString("pt-BR") : "");
+      setAlreadyPlayed(!!data.already_played);
+      if (data.already_played) {
+        // Já participou — vai direto para a tela do prêmio sem animação
+        setSpinLoading(false);
+        setStep("prize");
+        return;
+      }
       spinning.current = true; setSpinLabel("Girando..."); setSpinLoading(false);
       const clientIndex = prizes.findIndex(p => p.id === data.prize.id);
       const safeIndex   = clientIndex >= 0 ? clientIndex : 0;
@@ -424,7 +432,14 @@ export default function Home() {
         {/* Prize step */}
         {step === "prize" && wonPrize && (
           <div className="card text-center">
-            <div className="text-5xl mb-3">🎉</div>
+            {alreadyPlayed ? (
+              <div className="rounded-xl p-4 mb-4 text-left" style={{backgroundColor:"#FFF7ED", border:"2px solid #F97316"}}>
+                <p className="text-sm font-bold mb-1" style={{color:"#C2410C"}}>⚠️ Você já participou hoje!</p>
+                <p className="text-sm" style={{color:"#C2410C"}}>Este é o prêmio que você ganhou anteriormente. Cada CPF pode participar apenas uma vez por dia.</p>
+              </div>
+            ) : (
+              <div className="text-5xl mb-3">🎉</div>
+            )}
             <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{color:"#C9A84C"}}>você ganhou</p>
             <h2 className="text-2xl font-bold my-2" style={{fontFamily:"Playfair Display, serif", color:"#1A1A1A"}}>{wonPrize.name}</h2>
             {wonPrize.sub && <p className="text-sm text-zinc-400 mb-4">{wonPrize.sub}</p>}

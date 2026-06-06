@@ -23,13 +23,13 @@ export async function POST(req: NextRequest) {
   if (!customer) return NextResponse.json({ error: "Cadastro não encontrado. Tente se cadastrar novamente." }, { status: 404 });
 
   if (!isTest && customer.prize_code) {
-    return NextResponse.json({ error: "Você já participou da roleta! Cada CPF pode girar apenas uma vez." }, { status: 409 });
+    // Já tem prêmio — chama spin que vai retornar o código anterior com already_played
   }
 
   try {
     const result = await serverSpin(clean, "wheel");
 
-    if (customer.marketing_consent) {
+    if (!result.already_played && customer.marketing_consent) {
       const barName = await getConfig("bar_name");
       sendWelcome({
         cpf: clean, name: customer.name, phone: customer.phone,
@@ -39,11 +39,12 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({
-      prize:       result.prize,
-      targetIndex: result.targetIndex,
-      allPrizes:   result.allPrizes,
-      code:        result.code,
-      expires_at:  result.expiresAt,
+      prize:          result.prize,
+      targetIndex:    result.targetIndex,
+      allPrizes:      result.allPrizes,
+      code:           result.code,
+      expires_at:     result.expiresAt,
+      already_played: result.already_played ?? false,
     });
   } catch (e: unknown) {
     return NextResponse.json({ error: "Erro ao sortear prêmio. Tente novamente." }, { status: 500 });
