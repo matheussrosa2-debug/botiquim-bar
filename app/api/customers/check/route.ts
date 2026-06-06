@@ -12,6 +12,12 @@ export async function GET(req: NextRequest) {
   if (isTestCPF(clean)) return NextResponse.json({ exists: false });
 
   const db = supabaseAdmin();
+
+  // Se há evento ativo, permite recadastro — não bloqueia na primeira tela
+  const { data: activeEvent } = await db
+    .from("events").select("id").eq("active", true).maybeSingle();
+  if (activeEvent) return NextResponse.json({ exists: false });
+
   const { data } = await db
     .from("customers")
     .select("name, prize_code, prize_name, deleted_at")
