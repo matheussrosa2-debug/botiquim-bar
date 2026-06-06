@@ -148,6 +148,48 @@ export async function POST(req: NextRequest) {
   const supabaseKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").replace(/[^\x21-\x7E]/g, "").trim();
 
   try {
+    // ── Se há evento ativo e CPF já existe, atualiza o cadastro (recadastro) ──
+    const db2 = supabaseAdmin();
+    const { data: activeEvent2 } = await db2
+      .from("events").select("id").eq("active", true).maybeSingle();
+
+    if (activeEvent2) {
+      const { data: existing2 } = await db2
+        .from("customers").select("id").eq("cpf", cpfNum).maybeSingle();
+
+      if (existing2) {
+        // Atualiza cadastro existente com dados novos e vincula ao evento
+        const updatePayload = {
+          name:                 payload.name,
+          phone:                payload.phone,
+          email:                payload.email,
+          birth_date:           payload.birth_date,
+          instagram:            payload.instagram,
+          event_id:             payload.event_id,
+          event_name:           payload.event_name,
+          prize_code:           null,
+          prize_name:           null,
+          marketing_consent:    payload.marketing_consent,
+          marketing_consent_at: payload.marketing_consent_at,
+        };
+        const r = await fetch(`${supabaseUrl}/rest/v1/customers?cpf=eq.${cpfNum}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type":  "application/json; charset=utf-8",
+            "apikey":        supabaseKey,
+            "Authorization": `Bearer ${supabaseKey}`,
+            "Prefer":        "return=minimal",
+          },
+          body: safeStringify(updatePayload),
+        });
+        if (r.ok) {
+          await recordRegistrationAttempt(ip);
+          return NextResponse.json({ ok: true });
+        }
+        return NextResponse.json({ error: "Erro ao atualizar cadastro. Tente novamente." }, { status: 500 });
+      }
+    }
+
     const r = await fetch(`${supabaseUrl}/rest/v1/customers`, {
       method: "POST",
       headers: {
