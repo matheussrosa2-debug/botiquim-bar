@@ -39,10 +39,13 @@ function calcExpiry(prize: Prize): Date {
       return eod;
     case "until_date":
       if (prize.validity_until) {
-        // Se já contém hora (ex: "2025-06-07T22:00:00"), usa direto
-        // Se é só data (ex: "2025-06-07"), adiciona 23:59:59
+        // Se já contém hora (ex: "2026-06-07T22:00:00"), usa direto como local
+        // Se é só data (ex: "2026-06-07"), adiciona 23:59:59
         const hasTime = prize.validity_until.includes("T");
-        return new Date(hasTime ? prize.validity_until : prize.validity_until + "T23:59:59");
+        const dateStr = hasTime ? prize.validity_until : prize.validity_until + "T23:59:59";
+        // Interpreta como horário de Brasília (UTC-3)
+        const localDate = new Date(dateStr + "-03:00");
+        return localDate;
       }
       return new Date(now.getTime() + 86400000);
     case "hours":

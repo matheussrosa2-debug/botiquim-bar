@@ -11,7 +11,7 @@ function encodePayload(obj: Record<string, unknown>): string {
   return btoa(unescape(encodeURIComponent(json)));
 }
 
-type Prize = { id:string; name:string; short:string; how:string; sub:string; color:string; weight:number; validity_hours:number; validity_type:string; enabled:boolean; image_url?: string; valid_days?: number[]|null; };
+type Prize = { id:string; name:string; short:string; how:string; sub:string; color:string; weight:number; validity_hours:number; validity_type:string; enabled:boolean; image_url?: string; valid_days?: number[]|null; is_event_prize?: boolean; };
 type Event = { id:string; name:string; description:string; active:boolean; };
 type Step  = "cpf" | "form" | "wheel" | "prize";
 
@@ -201,6 +201,16 @@ export default function Home() {
     const dayNamesShort = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 
     if (!prize.valid_days || prize.valid_days.length === 0) {
+      // Brinde especial do evento — exibe alerta de retirada obrigatória na festa
+      if (prize.is_event_prize) {
+        return (
+          <div className="rounded-xl p-4 mb-4 text-left" style={{backgroundColor:"#FFF1F2", border:"2px solid #F43F5E"}}>
+            <p className="text-sm font-bold mb-1" style={{color:"#BE123C"}}>⚠️ Retirada obrigatória na festa!</p>
+            <p className="text-sm" style={{color:"#BE123C"}}>Este brinde deve ser retirado <strong>hoje, 07/06/2026, até as 22h</strong> no balcão de retirada.</p>
+            <p className="text-xs mt-2" style={{color:"#9F1239"}}>Após esse horário o código expira e o brinde não poderá ser resgatado.</p>
+          </div>
+        );
+      }
       return (
         <div className="rounded-xl p-4 mb-4 text-left" style={{backgroundColor:"#F0FDF4", border:"1px solid #86EFAC"}}>
           <p className="text-sm font-bold mb-1" style={{color:"#166534"}}>✅ Pode resgatar qualquer dia!</p>
