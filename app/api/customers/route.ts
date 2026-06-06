@@ -110,11 +110,20 @@ export async function POST(req: NextRequest) {
   if (!isTestCPF(cpfNum)) {
     try {
       const db = supabaseAdmin();
-      const { data: existing } = await db
-        .from("customers").select("id, deleted_at").eq("cpf", cpfNum).maybeSingle();
-      if (existing && !existing.deleted_at) {
-        return NextResponse.json({ error: "CPF já cadastrado no sistema." }, { status: 409 });
+
+      // Verificar se há evento ativo — se sim, recadastro é permitido
+      const { data: activeEvent } = await db
+        .from("events").select("id").eq("active", true).maybeSingle();
+
+      if (!activeEvent) {
+        // Sem evento ativo: comportamento normal — bloqueia CPF duplicado
+        const { data: existing } = await db
+          .from("customers").select("id, deleted_at").eq("cpf", cpfNum).maybeSingle();
+        if (existing && !existing.deleted_at) {
+          return NextResponse.json({ error: "CPF já cadastrado no sistema." }, { status: 409 });
+        }
       }
+      // Com evento ativo: permite novo cadastro (vinculado ao evento)
     } catch {}
   }
 

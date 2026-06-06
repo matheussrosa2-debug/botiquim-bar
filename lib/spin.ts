@@ -17,6 +17,7 @@ export type Prize = {
   issued_today: number;
   issued_this_week: number;
   issued_this_month: number;
+  is_event_prize: boolean;
 };
 
 export type SpinResult = {
@@ -37,7 +38,12 @@ function calcExpiry(prize: Prize): Date {
       eod.setHours(23, 59, 59, 999);
       return eod;
     case "until_date":
-      if (prize.validity_until) return new Date(prize.validity_until + "T23:59:59");
+      if (prize.validity_until) {
+        // Se já contém hora (ex: "2025-06-07T22:00:00"), usa direto
+        // Se é só data (ex: "2025-06-07"), adiciona 23:59:59
+        const hasTime = prize.validity_until.includes("T");
+        return new Date(hasTime ? prize.validity_until : prize.validity_until + "T23:59:59");
+      }
       return new Date(now.getTime() + 86400000);
     case "hours":
     default:
@@ -89,6 +95,69 @@ export async function serverSpin(cpfClean: string, type: "wheel" | "birthday" = 
   const allPrizes = (prizes || []) as Prize[];
   const hour = new Date().getHours();
   const total = totalCustomers ?? 0;
+
+  // ── PRIORIDADE ABSOLUTA: brindes especiais do evento ─────────
+  // Se existir qualquer brinde com is_event_prize = true e estoque
+  // disponível, sorteia APENAS entre eles. Só vai para o fluxo
+  // normal quando todos os especiais estiverem esgotados.
+  const eventPrizes = allPrizes.filter(p =>
+    p.is_event_prize &&
+    p.limit_type === "total" &&
+    (p.limit_total_count ?? 0) > (p.issued_count ?? 0)
+  );
+
+  if (eventPrizes.length > 0) {
+    const totalWeight = eventPrizes.reduce((s, p) => s + (p.weight || 100), 0);
+    let rand = Math.random() * totalWeight;
+    let selected = eventPrizes[0];
+    for (const p of eventPrizes) {
+      rand -= p.weight || 100;
+      if (rand <= 0) { selected = p; break; }
+    }
+
+    // Atualizar contadores
+    await db.from("prizes").update({
+      issued_count:      (selected.issued_count      || 0) + 1,
+      issued_today:      (selected.issued_today      || 0) + 1,
+      issued_this_week:  (selected.issued_this_week  || 0) + 1,
+      issued_this_month: (selected.issued_this_month || 0) + 1,
+      last_issued_at:    new Date().toISOString(),
+    }).eq("id", selected.id);
+
+    // Gerar código único
+    let code = genCode();
+    for (let i = 0; i < 10; i++) {
+      const { data } = await db.from("prize_codes").select("code").eq("code", code).maybeSingle();
+      if (!data) break;
+      code = genCode();
+    }
+
+    const expiresAt = calcExpiry(selected);
+
+    const { data: customer } = await db.from("customers")
+      .select("name, phone, event_id, event_name").eq("cpf", cpfClean).single();
+
+    await db.from("prize_codes").insert({
+      code,
+      customer_cpf:         cpfClean,
+      customer_name:        customer?.name ?? "",
+      customer_phone:       customer?.phone ?? "",
+      prize_name:           selected.name,
+      prize_how:            selected.how,
+      prize_validity_hours: selected.validity_hours || 24,
+      expires_at:           expiresAt.toISOString(),
+      type,
+      event_id:             customer?.event_id   ?? null,
+      event_name:           customer?.event_name ?? null,
+    });
+
+    await db.from("customers").update({
+      prize_code: code, prize_name: selected.name,
+    }).eq("cpf", cpfClean);
+
+    const targetIndex = allPrizes.findIndex(p => p.id === selected.id);
+    return { prize: selected, targetIndex, allPrizes, code, expiresAt: expiresAt.toISOString() };
+  }
 
   // Separate prizes into two pools:
   // 1. "guaranteed" — per_registrations prizes that are overdue (must come out)
