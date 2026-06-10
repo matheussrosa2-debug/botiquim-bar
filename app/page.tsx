@@ -38,6 +38,7 @@ export default function Home() {
   const [wonPrize, setWonPrize]     = useState<Prize | null>(null);
   const [wonCode, setWonCode]       = useState("");
   const [wonExpiry, setWonExpiry]   = useState("");
+  const [wonExpiresAt, setWonExpiresAt] = useState("");
   const [alreadyPlayed, setAlreadyPlayed] = useState(false);
   const [spinLoading, setSpinLoading] = useState(false);
   const [firstName, setFirstName]   = useState("");
@@ -184,6 +185,7 @@ export default function Home() {
       const data = await res.json();
       setWonPrize(data.prize); setWonCode(data.code);
       setWonExpiry(data.expires_at ? new Date(data.expires_at).toLocaleString("pt-BR") : "");
+      setWonExpiresAt(data.expires_at || "");
       setAlreadyPlayed(!!data.already_played);
       if (data.already_played) {
         // Já participou — vai direto para a tela do prêmio sem animação
@@ -204,76 +206,34 @@ export default function Home() {
   function setF(k: string, v: string) { setForm(f => ({ ...f, [k]: v })); setFormErr(e => ({ ...e, [k]: "" })); }
 
   // ── Valid days helper ────────────────────────────────────────────
-  function ValidDaysBox({ prize }: { prize: Prize }) {
-    const dayNames     = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
-    const dayNamesShort = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
-
-    if (!prize.valid_days || prize.valid_days.length === 0) {
-      // Brinde especial do evento — exibe alerta de retirada obrigatória na festa
-      if (prize.is_event_prize) {
-        return (
-          <div className="rounded-xl p-4 mb-4 text-left" style={{backgroundColor:"#FFF1F2", border:"2px solid #F43F5E"}}>
-            <p className="text-sm font-bold mb-1" style={{color:"#BE123C"}}>⚠️ Retirada obrigatória na festa!</p>
-            <p className="text-sm" style={{color:"#BE123C"}}>Este brinde deve ser retirado <strong>hoje, 07/06/2026, até as 22h</strong> no balcão de retirada.</p>
-            <p className="text-xs mt-2" style={{color:"#9F1239"}}>Após esse horário o código expira e o brinde não poderá ser resgatado.</p>
-          </div>
-        );
-      }
+  function ValidDaysBox({ prize, expiresAt }: { prize: Prize; expiresAt?: string }) {
+    // Brinde especial do evento — exibe alerta de retirada obrigatória na festa
+    if (prize.is_event_prize) {
       return (
-        <div className="rounded-xl p-4 mb-4 text-left" style={{backgroundColor:"#F0FDF4", border:"1px solid #86EFAC"}}>
-          <p className="text-sm font-bold mb-1" style={{color:"#166534"}}>✅ Pode resgatar qualquer dia!</p>
-          <p className="text-sm" style={{color:"#166534"}}>É só chamar o garçom e mostrar o código. Aproveita! 🍺</p>
+        <div className="rounded-xl p-4 mb-4 text-left" style={{backgroundColor:"#FFF1F2", border:"2px solid #F43F5E"}}>
+          <p className="text-sm font-bold mb-1" style={{color:"#BE123C"}}>⚠️ Retirada obrigatória na festa!</p>
+          <p className="text-sm" style={{color:"#BE123C"}}>Este brinde deve ser retirado <strong>hoje, 07/06/2026, até as 22h</strong> no balcão de retirada.</p>
+          <p className="text-xs mt-2" style={{color:"#9F1239"}}>Após esse horário o código expira e o brinde não poderá ser resgatado.</p>
         </div>
       );
     }
 
-    const sorted   = [...prize.valid_days].sort((a, b) => a - b);
-    const daysText = sorted.map(d => dayNames[d]).join(" e ");
-    const today    = new Date().getDay();
-    const isToday  = prize.valid_days.includes(today);
-
-    // Find next valid day
-    let nextDateStr = "";
-    let nextDayShort = "";
-    for (let i = 1; i <= 7; i++) {
-      const next = (today + i) % 7;
-      if (prize.valid_days.includes(next)) {
-        const d = new Date();
-        d.setDate(d.getDate() + i);
-        nextDateStr  = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-        nextDayShort = dayNamesShort[next];
-        break;
-      }
-    }
-
-    if (isToday) {
-      return (
-        <div className="rounded-xl p-4 mb-4 text-left" style={{backgroundColor:"#FDF6E3", border:"1px solid #C9A84C55"}}>
-          <p className="text-sm font-bold mb-1" style={{color:"#A88830"}}>🎉 Hoje é dia de resgatar!</p>
-          <p className="text-sm" style={{color:"#78716c"}}>
-            Chama o garçom, mostra o código e aproveita! 🍺
-          </p>
-          <p className="text-xs mt-2" style={{color:"#A88830"}}>
-            📅 Resgate: <strong>{daysText}</strong>
-          </p>
-          <p className="text-xs mt-1" style={{color:"#C41E1E"}}>
-            ⚠️ Válido somente para consumo no local.
-          </p>
-        </div>
-      );
-    }
+    // Calcular data de expiração formatada (só data, sem horário)
+    const expiryFormatted = expiresAt
+      ? new Date(expiresAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" })
+      : null;
 
     return (
       <div className="rounded-xl p-4 mb-4 text-left" style={{backgroundColor:"#FDF6E3", border:"1px solid #C9A84C55"}}>
-        <p className="text-sm font-bold mb-1" style={{color:"#C41E1E"}}>
-          📅 Resgate: {daysText}
+        <p className="text-sm font-bold mb-1" style={{color:"#A88830"}}>🎁 Resgate na sua próxima visita!</p>
+        <p className="text-sm" style={{color:"#78716c"}}>
+          Guarde este código e apresente ao garçom na sua <strong>próxima visita</strong> para resgatar seu prêmio. 😄
         </p>
-        <p className="text-sm mb-2" style={{color:"#78716c"}}>
-          Guarda esse código e vem resgatar com o garçom nas <strong>{daysText}</strong>! 😄
-        </p>
-        <p className="text-xs" style={{color:"#C41E1E"}}>
-          ⚠️ Válido somente para consumo no local.
-        </p>
+        {expiryFormatted && (
+          <p className="text-xs mt-2" style={{color:"#C41E1E"}}>
+            ⚠️ Válido até <strong>{expiryFormatted}</strong>. Válido somente para consumo no local.
+          </p>
+        )}
       </div>
     );
   }
@@ -459,7 +419,7 @@ export default function Home() {
             </div>
 
             {/* Valid days — mensagens descontraídas */}
-            <ValidDaysBox prize={wonPrize} />
+            <ValidDaysBox prize={wonPrize} expiresAt={wonExpiresAt} />
 
             <div className="border-2 border-dashed border-zinc-200 rounded-xl p-4 mb-2">
               <p className="text-xs text-zinc-400 uppercase tracking-wider mb-2">código do prêmio</p>
@@ -467,7 +427,7 @@ export default function Home() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`/api/codes/qr?code=${wonCode}`} alt="QR Code do prêmio" className="w-28 h-28 mx-auto rounded-lg" />
             </div>
-            <p className="text-xs text-zinc-400">Mostre o código ou QR ao garçom.<br />Expira em: {wonExpiry}</p>
+            <p className="text-xs text-zinc-400">Mostre o código ou QR ao garçom.<br />Válido até: {wonExpiresAt ? new Date(wonExpiresAt).toLocaleDateString("pt-BR") : wonExpiry}</p>
           </div>
         )}
 
