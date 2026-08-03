@@ -74,7 +74,7 @@ export async function sendWelcome(customer: {
     primeiro_nome: customer.name.split(" ")[0],
     premio:        customer.prize_name,
     codigo:        customer.prize_code,
-    validade:      expiresAt.toLocaleString("pt-BR"),
+    validade:      expiresAt.toLocaleDateString("pt-BR"),
     bar_nome:      customer.bar_name || "Botiquim Bar",
   });
   const result = await sendWhatsApp(customer.phone, message, config);
