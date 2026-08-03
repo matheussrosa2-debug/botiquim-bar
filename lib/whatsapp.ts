@@ -24,7 +24,8 @@ export function buildMessage(template: string, vars: Record<string, string>): st
   for (const [k, v] of Object.entries(vars)) {
     msg = msg.replaceAll(`{${k}}`, v);
   }
-  msg = msg.replace(/\\n/g, '\n');
+  // Converte \n literal (vindo do banco) em quebra de linha real
+  msg = msg.replace(/\\n/g, '\n').replace(/\n/g, '\n');
   return msg;
 }
 function cleanPhone(phone: string): string {
