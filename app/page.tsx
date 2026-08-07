@@ -92,6 +92,15 @@ export default function Home() {
 
   useEffect(() => { drawWheel(wheelAngle.current); }, [drawWheel]);
 
+  // Redesenha quando o canvas entra no DOM (step muda para "wheel")
+  useEffect(() => {
+    if (step === "wheel" && prizes.length > 0) {
+      // Pequeno delay para garantir que o canvas está montado no DOM
+      const t = setTimeout(() => drawWheel(wheelAngle.current), 50);
+      return () => clearTimeout(t);
+    }
+  }, [step, prizes, drawWheel]);
+
   function animateToIndex(targetIndex: number, onDone: () => void) {
     const N = prizes.length, arc = (2 * Math.PI) / N;
     let R = 1.5 * Math.PI - (targetIndex * arc + arc / 2) - (wheelAngle.current % (2 * Math.PI));
