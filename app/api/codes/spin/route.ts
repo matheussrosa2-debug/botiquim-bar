@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
         cpf: clean, name: customer.name, phone: customer.phone,
         prize_name: result.prize.name, prize_code: result.code,
         expires_at: result.expiresAt, bar_name: barName || "Botiquim Bar",
+        valid_days: result.prize.valid_days ?? null,
       }).catch(() => {});
     }
 
