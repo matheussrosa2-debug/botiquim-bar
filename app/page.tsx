@@ -94,12 +94,20 @@ export default function Home() {
 
   // Redesenha quando o canvas entra no DOM (step muda para "wheel")
   useEffect(() => {
-    if (step === "wheel" && prizes.length > 0) {
-      // Pequeno delay para garantir que o canvas está montado no DOM
-      const t = setTimeout(() => drawWheel(wheelAngle.current), 50);
-      return () => clearTimeout(t);
+    if (step === "wheel" && prizes.length > 0 && !prizesLoading) {
+      // Tenta desenhar várias vezes até o canvas estar disponível no DOM
+      let attempts = 0;
+      const tryDraw = () => {
+        if (canvasRef.current) {
+          drawWheel(wheelAngle.current);
+        } else if (attempts < 10) {
+          attempts++;
+          setTimeout(tryDraw, 100);
+        }
+      };
+      setTimeout(tryDraw, 80);
     }
-  }, [step, prizes, drawWheel]);
+  }, [step, prizes, prizesLoading, drawWheel]);
 
   function animateToIndex(targetIndex: number, onDone: () => void) {
     const N = prizes.length, arc = (2 * Math.PI) / N;
