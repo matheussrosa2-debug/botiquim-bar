@@ -66,9 +66,16 @@ export async function logMessage(params: {
 export async function sendWelcome(customer: {
   cpf: string; name: string; phone: string; prize_name: string;
   prize_code: string; expires_at: string; bar_name?: string;
+  valid_days?: number[] | null;
 }) {
   const [config, template] = await Promise.all([getWaConfig(), getTemplate("welcome")]);
   if (!config?.enabled || !template) return;
+
+  const dayNames = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+  const diasResgate = customer.valid_days && customer.valid_days.length > 0
+    ? customer.valid_days.sort((a, b) => a - b).map(d => dayNames[d]).join(", ")
+    : "Qualquer dia";
+
   const expiresAt = new Date(customer.expires_at);
   const message = buildMessage(template, {
     nome:          customer.name,
@@ -77,6 +84,7 @@ export async function sendWelcome(customer: {
     codigo:        customer.prize_code,
     validade:      expiresAt.toLocaleDateString("pt-BR"),
     bar_nome:      customer.bar_name || "Botiquim Bar",
+    dias_resgate:  diasResgate,
   });
   const result = await sendWhatsApp(customer.phone, message, config);
   await logMessage({
